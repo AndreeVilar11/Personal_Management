@@ -1,5 +1,5 @@
 // Guarda a "casca" da app para abrir rápido; os dados vêm sempre do Supabase.
-const CACHE = 'personal-management-v4';
+const CACHE = 'personal-management-v5';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', (e) => {
@@ -15,7 +15,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then((r) => { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); return r; })
       .catch(() => caches.match(e.request))
   );
