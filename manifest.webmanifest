@@ -1,8 +1,9 @@
 {
-  "name": "Finanças da Família",
-  "short_name": "Finanças",
-  "start_url": "./",
-  "scope": "./",
+  "name": "Família Da Costa Vilar",
+  "short_name": "Família Da Costa Vilar",
+  "id": "/Personal_Management/",
+  "start_url": "/Personal_Management/",
+  "scope": "/Personal_Management/",
   "display": "standalone",
   "background_color": "#f6f7f8",
   "theme_color": "#0f766e",

@@ -1,5 +1,5 @@
 // Guarda a "casca" da app para abrir rápido; os dados vêm sempre do Supabase.
-const CACHE = 'financas-v2';
+const CACHE = 'personal-management-v4';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', (e) => {

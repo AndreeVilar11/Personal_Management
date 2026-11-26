@@ -1,4 +1,4 @@
-# Finanças da Família — Volta 1
+# Personal Management — Volta 1 (Finanças)
 
 App web instalável (PWA) para registar despesas partilhadas a 50/50 e ver sempre quem deve a quem.
 Base de dados e login: Supabase. Alojamento: GitHub Pages. Custo: 0 €.
@@ -32,10 +32,10 @@ Em **Project Settings → API Keys** (ou no botão **Connect**), copia o *Projec
 
 ## Passo 5 — Publicar (GitHub Pages)
 
-1. No GitHub, cria um repositório novo, por exemplo `financas`. Tem de ser **público** para o GitHub Pages ser gratuito.
+1. No GitHub, o repositório é `AndreeVilar11/Personal_Management`. Tem de ser **público** para o GitHub Pages ser gratuito.
 2. Usa **Add file → Upload files** e arrasta todos os ficheiros desta pasta (incluindo `config.js` já preenchido). Depois carrega em **Commit**.
 3. Vai a **Settings → Pages → Build and deployment**, escolhe *Deploy from a branch*, depois `main` e `/ (root)`, e carrega em **Save**.
-4. Em 1 a 2 minutos a app fica em `https://<o-teu-utilizador>.github.io/financas/`.
+4. Em 1 a 2 minutos a app fica em https://andreevilar11.github.io/Personal_Management/.
 
 ## Passo 6 — Instalar nos telemóveis
 
@@ -58,4 +58,4 @@ Cada um entra com a sua conta uma vez e a sessão fica guardada.
 
 - **Cópias de segurança:** o plano gratuito do Supabase não faz backups. Uma vez por mês, vai a **Table Editor → expenses → Export to CSV**. Uma exportação automática fica para uma próxima volta.
 - **Pausa por inatividade:** o Supabase pausa projetos gratuitos ao fim de 1 semana sem uso. Com uso diário isso não acontece. Se acontecer, os dados ficam guardados e basta carregar em **Resume project** no painel.
-- **Atualizar a app:** depois de substituir ficheiros no GitHub, muda `financas-v1` para `financas-v2` em `sw.js`, para os telemóveis receberem a versão nova.
+- **Atualizar a app:** depois de substituir ficheiros no GitHub, aumenta o número da versão em `sw.js` (por exemplo de `personal-management-v3` para `personal-management-v4`), para os telemóveis receberem a versão nova.
