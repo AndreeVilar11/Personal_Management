@@ -84,10 +84,29 @@ $('#login-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
   $('#login-error').textContent = '';
-  const { error } = await sb.auth.signInWithPassword({
-    email: f.get('email'), password: f.get('password'),
-  });
-  if (error) $('#login-error').textContent = 'Email ou palavra-passe incorretos.';
+  if (SUPABASE_URL.includes('SEU-PROJETO') || SUPABASE_ANON_KEY.includes('COLAR')) {
+    $('#login-error').textContent = 'O config.js ainda tem os valores de exemplo.';
+    return;
+  }
+  let error;
+  try {
+    ({ error } = await sb.auth.signInWithPassword({
+      email: String(f.get('email')).trim(), password: f.get('password'),
+    }));
+  } catch (e) { error = e; }
+  if (!error) return;
+  console.error('Login falhou:', error);
+  const msg = String(error.message || error);
+  const status = error.status ?? '';
+  let text;
+  if (/invalid login credentials/i.test(msg)) text = 'Email ou palavra-passe incorretos.';
+  else if (/email not confirmed/i.test(msg)) text = 'A conta ainda não está confirmada no Supabase (Auto Confirm).';
+  else if (/invalid api key|no api key|jwt|apikey/i.test(msg) || status === 401)
+    text = 'A chave no config.js não é válida. Usa a chave anon/publishable.';
+  else if (/fetch|network|load failed/i.test(msg) || status === 0)
+    text = 'Não foi possível ligar ao Supabase. Verifica o SUPABASE_URL no config.js.';
+  else text = 'Erro ao entrar.';
+  $('#login-error').textContent = `${text} [${status} ${msg}]`;
 });
 $('#logout').addEventListener('click', () => sb.auth.signOut());
 
