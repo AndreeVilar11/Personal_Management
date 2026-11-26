@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Finanças" />
+  <title>Finanças</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- LOGIN -->
+  <main id="login" class="screen" hidden>
+    <div class="login-card">
+      <img src="icon.svg" alt="" width="56" height="56" />
+      <h1>Finanças</h1>
+      <form id="login-form">
+        <label>Email<input name="email" type="email" autocomplete="username" required /></label>
+        <label>Palavra-passe<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button class="btn primary" type="submit">Entrar</button>
+        <p class="error" id="login-error" role="alert"></p>
+      </form>
+    </div>
+  </main>
+
+  <!-- APP -->
+  <div id="app" class="screen" hidden>
+    <header class="topbar">
+      <button class="icon-btn" id="prev-month" aria-label="Mês anterior">‹</button>
+      <h1 id="month-label"></h1>
+      <button class="icon-btn" id="next-month" aria-label="Mês seguinte">›</button>
+      <button class="text-btn" id="logout">Sair</button>
+    </header>
+
+    <section id="tab-expenses" class="tab">
+      <div class="balance-card" id="balance-card">
+        <p class="balance-label" id="balance-label">A calcular…</p>
+        <p class="balance-amount" id="balance-amount"></p>
+        <button class="btn ghost" id="settle-btn" hidden>Registar acerto</button>
+      </div>
+
+      <div class="summary" id="summary"></div>
+
+      <ul class="list" id="expense-list"></ul>
+      <p class="empty" id="empty" hidden>Sem despesas neste mês. Carrega em + para registar.</p>
+    </section>
+
+    <section id="tab-recurring" class="tab" hidden>
+      <p class="hint">Despesas fixas lançadas automaticamente todos os meses no dia indicado.</p>
+      <ul class="list" id="recurring-list"></ul>
+      <button class="btn ghost full" id="add-recurring">+ Nova despesa fixa</button>
+    </section>
+
+    <button class="fab" id="fab" aria-label="Nova despesa">+</button>
+
+    <nav class="tabbar">
+      <button class="tab-btn active" data-tab="expenses">Despesas</button>
+      <button class="tab-btn" data-tab="recurring">Fixas</button>
+    </nav>
+  </div>
+
+  <!-- FOLHA: DESPESA -->
+  <dialog id="expense-sheet" class="sheet">
+    <form id="expense-form" method="dialog">
+      <h2 id="expense-title">Nova despesa</h2>
+      <label>Descrição<input name="description" required maxlength="120" autocomplete="off" /></label>
+      <label>Valor (€)<input name="amount" inputmode="decimal" required placeholder="0,00" autocomplete="off" /></label>
+      <label class="switch">
+        <input type="checkbox" name="joint" />
+        <span>Conta conjunta</span>
+        <small>Conta para o resumo, não para o saldo</small>
+      </label>
+      <details class="more">
+        <summary>Mais opções</summary>
+        <label>Data<input name="spent_on" type="date" required /></label>
+        <label>Pago por<select name="paid_by"></select></label>
+      </details>
+      <p class="error" id="expense-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button class="btn danger" type="button" id="expense-delete" hidden>Apagar</button>
+        <button class="btn" type="button" data-close>Cancelar</button>
+        <button class="btn primary" type="submit">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- FOLHA: ACERTO -->
+  <dialog id="settle-sheet" class="sheet">
+    <form id="settle-form" method="dialog">
+      <h2>Registar acerto</h2>
+      <p id="settle-desc" class="hint"></p>
+      <label>Valor (€)<input name="amount" inputmode="decimal" required autocomplete="off" /></label>
+      <p class="error" id="settle-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button class="btn" type="button" data-close>Cancelar</button>
+        <button class="btn primary" type="submit">Registar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- FOLHA: RECORRENTE -->
+  <dialog id="recurring-sheet" class="sheet">
+    <form id="recurring-form" method="dialog">
+      <h2 id="recurring-title">Nova despesa fixa</h2>
+      <label>Descrição<input name="description" required maxlength="120" autocomplete="off" /></label>
+      <label>Valor (€)<input name="amount" inputmode="decimal" required placeholder="0,00" autocomplete="off" /></label>
+      <label>Dia do mês (1–28)<input name="day_of_month" type="number" min="1" max="28" required /></label>
+      <label class="switch">
+        <input type="checkbox" name="joint" checked />
+        <span>Conta conjunta</span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" name="active" checked />
+        <span>Ativa</span>
+      </label>
+      <p class="error" id="recurring-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button class="btn danger" type="button" id="recurring-delete" hidden>Apagar</button>
+        <button class="btn" type="button" data-close>Cancelar</button>
+        <button class="btn primary" type="submit">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
