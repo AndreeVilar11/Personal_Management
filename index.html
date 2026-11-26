@@ -50,6 +50,16 @@
       <p class="empty" id="empty" hidden>Sem despesas neste mês. Carrega em + para registar.</p>
     </section>
 
+    <section id="tab-personal" class="tab" hidden>
+      <div class="balance-card">
+        <p class="balance-label">As minhas despesas pessoais</p>
+        <p class="balance-amount" id="personal-total"></p>
+        <p class="balance-sub" id="personal-budget"></p>
+      </div>
+      <ul class="list" id="personal-list"></ul>
+      <p class="empty" id="personal-empty" hidden>Sem despesas pessoais neste mês. Carrega em + para registar.</p>
+    </section>
+
     <section id="tab-recurring" class="tab" hidden>
       <p class="hint">Despesas fixas lançadas automaticamente todos os meses no dia indicado.</p>
       <ul class="list" id="recurring-list"></ul>
@@ -59,7 +69,8 @@
     <button class="fab" id="fab" aria-label="Nova despesa">+</button>
 
     <nav class="tabbar">
-      <button class="tab-btn active" data-tab="expenses">Despesas</button>
+      <button class="tab-btn active" data-tab="expenses">Casa</button>
+      <button class="tab-btn" data-tab="personal">Pessoal</button>
       <button class="tab-btn" data-tab="recurring">Fixas</button>
     </nav>
   </div>
@@ -70,15 +81,23 @@
       <h2 id="expense-title">Nova despesa</h2>
       <label>Descrição<input name="description" required maxlength="120" autocomplete="off" /></label>
       <label>Valor (€)<input name="amount" inputmode="decimal" required placeholder="0,00" autocomplete="off" /></label>
-      <label class="switch">
-        <input type="checkbox" name="joint" />
-        <span>Conta conjunta</span>
-        <small>Conta para o resumo, não para o saldo</small>
+      <div class="kind">
+        <div class="seg" role="group" aria-label="Tipo de despesa">
+          <button type="button" data-kind="split">Dividir</button>
+          <button type="button" data-kind="joint">Conjunta</button>
+          <button type="button" data-kind="personal">Pessoal</button>
+        </div>
+        <p class="kind-hint" id="kind-hint"></p>
+      </div>
+      <label class="switch" id="budget-row" hidden>
+        <input type="checkbox" name="in_budget" />
+        <span>Incluir no orçamento conjunto</span>
+        <small>Passa a ser visível para os dois. Não mexe no saldo.</small>
       </label>
       <details class="more">
         <summary>Mais opções</summary>
         <label>Data<input name="spent_on" type="date" required /></label>
-        <label>Pago por<select name="paid_by"></select></label>
+        <label id="paid-by-row">Pago por<select name="paid_by"></select></label>
       </details>
       <p class="error" id="expense-error" role="alert"></p>
       <div class="sheet-actions">

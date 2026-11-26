@@ -58,7 +58,7 @@ button, input, select { font: inherit; color: inherit; }
 .balance-card .btn { margin-top: 12px; }
 
 /* RESUMO */
-.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 4px; }
+.summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0 4px; }
 .summary div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
   padding: 10px; }
 .summary span { display: block; color: var(--muted); font-size: .78rem; }
@@ -125,3 +125,16 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .sheet form { display: grid; gap: 14px; padding: 20px 20px calc(20px + var(--safe-b)); }
 .sheet h2 { margin: 0; font-size: 1.15rem; }
 .sheet-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* TIPO DE DESPESA (controlo segmentado) */
+.kind { display: grid; gap: 6px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
+.seg button { border: 0; background: none; padding: 9px 4px; border-radius: 9px;
+  font-weight: 600; font-size: .92rem; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
+.kind-hint { margin: 0; font-size: .82rem; color: var(--muted); min-height: 1.2em; }
+.balance-sub { margin: 6px 0 0; color: var(--muted); font-size: .85rem; }
+.list li.readonly { cursor: default; }
+.list li.readonly:active { background: none; }

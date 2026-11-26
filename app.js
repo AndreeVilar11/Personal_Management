@@ -48,6 +48,7 @@ const state = {
   month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   editingExpense: null,
   editingRecurring: null,
+  tab: 'expenses',
 };
 const nameOf = (id) => state.members.find((m) => m.user_id === id)?.name ?? '?';
 const me = () => state.members.find((m) => m.user_id === state.user?.id);
@@ -157,6 +158,7 @@ function render() {
   renderBalance();
   renderSummary();
   renderList();
+  renderPersonal();
   renderRecurring();
 }
 
@@ -182,26 +184,43 @@ function renderBalance() {
   }
 }
 
+const sum = (arr) => arr.reduce((s, e) => s + Number(e.amount), 0);
+const isMine = (e) => e.paid_by === state.user.id;
+
 function renderSummary() {
-  const sum = (arr) => arr.reduce((s, e) => s + Number(e.amount), 0);
-  const joint = state.expenses.filter((e) => e.joint);
-  const box = $('#summary');
-  box.replaceChildren(
-    el('div', { class: 'total' }, el('span', {}, 'Gasto total no mês'), el('strong', {}, fmt(sum(state.expenses)))),
+  const shared = state.expenses.filter((e) => !e.personal);
+  const budgetPersonal = state.expenses.filter((e) => e.personal && e.in_budget);
+  const cards = [
     ...state.members.map((m) =>
-      el('div', {}, el('span', {}, `Pago por ${m.name}`),
-        el('strong', {}, fmt(sum(state.expenses.filter((e) => !e.joint && e.paid_by === m.user_id)))))),
-    el('div', {}, el('span', {}, 'Conta conjunta'), el('strong', {}, fmt(sum(joint)))),
+      el('div', {}, el('span', {}, `Dividido · pago por ${m.name}`),
+        el('strong', {}, fmt(sum(shared.filter((e) => !e.joint && e.paid_by === m.user_id)))))),
+    el('div', {}, el('span', {}, 'Conta conjunta'), el('strong', {}, fmt(sum(shared.filter((e) => e.joint))))),
+    el('div', {}, el('span', {}, 'Pessoais no orçamento'), el('strong', {}, fmt(sum(budgetPersonal)))),
+  ];
+  $('#summary').replaceChildren(
+    el('div', { class: 'total' }, el('span', {}, 'Gasto da casa no mês'),
+      el('strong', {}, fmt(sum(shared) + sum(budgetPersonal)))),
+    ...cards,
   );
 }
 
-function renderList() {
-  const items = [
-    ...state.expenses.map((e) => ({ kind: 'e', date: e.spent_on, ts: e.created_at, row: e })),
-    ...state.settlements.map((s) => ({ kind: 's', date: s.settled_on, ts: s.created_at, row: s })),
-  ].sort((a, b) => (b.date + b.ts).localeCompare(a.date + a.ts));
+function expenseItem(e, { showPayer = true } = {}) {
+  const editable = !e.personal || isMine(e);
+  let meta;
+  if (e.personal) meta = isMine(e) ? 'Pessoal' : `Pessoal · ${nameOf(e.paid_by)}`;
+  else if (e.joint) meta = 'Conta conjunta';
+  else meta = `Dividido · pago por ${nameOf(e.paid_by)}`;
+  if (!showPayer && e.personal) meta = null;
+  return el('li', editable ? { onclick: () => openExpense(e) } : { class: 'readonly' },
+    el('div', { class: 'item-main' },
+      el('div', { class: 'item-desc' }, e.description),
+      el('div', { class: 'item-meta' }, meta,
+        e.recurring_id ? el('span', { class: 'tag' }, 'fixa') : null,
+        e.personal && e.in_budget ? el('span', { class: 'tag' }, 'no orçamento') : null)),
+    el('div', { class: 'item-amount' }, fmt(e.amount)));
+}
 
-  const list = $('#expense-list');
+function fillList(list, items) {
   list.replaceChildren();
   let lastDay = null;
   for (const it of items) {
@@ -209,24 +228,35 @@ function renderList() {
       lastDay = it.date;
       list.append(el('li', { class: 'day-head' }, cap(dayFmt.format(new Date(it.date + 'T12:00')))));
     }
-    if (it.kind === 'e') {
-      const e = it.row;
-      list.append(el('li', { onclick: () => openExpense(e) },
-        el('div', { class: 'item-main' },
-          el('div', { class: 'item-desc' }, e.description),
-          el('div', { class: 'item-meta' },
-            e.joint ? 'Conta conjunta' : `Pago por ${nameOf(e.paid_by)}`,
-            e.recurring_id ? el('span', { class: 'tag' }, 'fixa') : null)),
-        el('div', { class: 'item-amount' }, fmt(e.amount))));
-    } else {
-      const s = it.row;
-      list.append(el('li', { class: 'settlement', onclick: () => deleteSettlement(s) },
+    list.append(it.node);
+  }
+}
+const byDateDesc = (a, b) => (b.date + b.ts).localeCompare(a.date + a.ts);
+
+function renderList() {
+  const items = [
+    ...state.expenses.filter((e) => !e.personal || e.in_budget)
+      .map((e) => ({ date: e.spent_on, ts: e.created_at, node: expenseItem(e) })),
+    ...state.settlements.map((s) => ({
+      date: s.settled_on, ts: s.created_at,
+      node: el('li', { class: 'settlement', onclick: () => deleteSettlement(s) },
         el('div', { class: 'item-main' },
           el('div', { class: 'item-desc' }, `Acerto: ${nameOf(s.from_user)} → ${nameOf(s.to_user)}`)),
-        el('div', { class: 'item-amount' }, fmt(s.amount))));
-    }
-  }
+        el('div', { class: 'item-amount' }, fmt(s.amount))),
+    })),
+  ].sort(byDateDesc);
+  fillList($('#expense-list'), items);
   $('#empty').hidden = items.length > 0;
+}
+
+function renderPersonal() {
+  const mine = state.expenses.filter((e) => e.personal && isMine(e));
+  $('#personal-total').textContent = fmt(sum(mine));
+  const inBudget = sum(mine.filter((e) => e.in_budget));
+  $('#personal-budget').textContent = inBudget > 0 ? `${fmt(inBudget)} incluídos no orçamento conjunto` : 'Só tu vês estas despesas';
+  fillList($('#personal-list'),
+    mine.map((e) => ({ date: e.spent_on, ts: e.created_at, node: expenseItem(e, { showPayer: false }) })).sort(byDateDesc));
+  $('#personal-empty').hidden = mine.length > 0;
 }
 
 function renderRecurring() {
@@ -242,12 +272,16 @@ function renderRecurring() {
 }
 
 // ---------- navegação ----------
-document.querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('.tab-btn').forEach((x) => x.classList.toggle('active', x === b));
-  $('#tab-expenses').hidden = b.dataset.tab !== 'expenses';
-  $('#tab-recurring').hidden = b.dataset.tab !== 'recurring';
-  $('#fab').hidden = b.dataset.tab !== 'expenses';
-}));
+function showTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll('.tab-btn').forEach((x) => x.classList.toggle('active', x.dataset.tab === tab));
+  $('#tab-expenses').hidden = tab !== 'expenses';
+  $('#tab-personal').hidden = tab !== 'personal';
+  $('#tab-recurring').hidden = tab !== 'recurring';
+  $('#fab').hidden = tab === 'recurring';
+  $('#fab').setAttribute('aria-label', tab === 'personal' ? 'Nova despesa pessoal' : 'Nova despesa');
+}
+document.querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 $('#prev-month').addEventListener('click', () => {
   state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1); refresh();
 });
@@ -259,7 +293,21 @@ document.querySelectorAll('[data-close]').forEach((b) =>
 
 // ---------- despesa ----------
 const expForm = $('#expense-form');
-function openExpense(e = null) {
+const KIND_HINT = {
+  split: () => `Dividido a 50/50 com ${other()?.name ?? 'o outro'}.`,
+  joint: () => 'Paga pela conta conjunta. Conta para o resumo, não para o saldo.',
+  personal: () => `Só tu vês. Não entra no saldo com ${other()?.name ?? 'o outro'}.`,
+};
+function setKind(kind) {
+  expForm.dataset.kind = kind;
+  expForm.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kind === kind)));
+  $('#kind-hint').textContent = KIND_HINT[kind]();
+  $('#budget-row').hidden = kind !== 'personal';
+  $('#paid-by-row').hidden = kind === 'personal';
+}
+expForm.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => setKind(b.dataset.kind)));
+
+function openExpense(e = null, defaultKind = 'split') {
   state.editingExpense = e;
   expForm.reset();
   $('#expense-error').textContent = '';
@@ -269,26 +317,30 @@ function openExpense(e = null) {
   sel.replaceChildren(...state.members.map((m) => el('option', { value: m.user_id }, m.name)));
   expForm.elements.description.value = e?.description ?? '';
   expForm.elements.amount.value = e ? amountToInput(e.amount) : '';
-  expForm.elements.joint.checked = e?.joint ?? false;
+  expForm.elements.in_budget.checked = e?.in_budget ?? false;
   expForm.elements.spent_on.value = e?.spent_on ?? today();
   sel.value = e?.paid_by ?? state.user.id;
+  setKind(e ? (e.personal ? 'personal' : e.joint ? 'joint' : 'split') : defaultKind);
   expForm.querySelector('details').open = false;
   $('#expense-sheet').showModal();
   if (!e) expForm.elements.description.focus();
 }
-$('#fab').addEventListener('click', () => openExpense());
+$('#fab').addEventListener('click', () => openExpense(null, state.tab === 'personal' ? 'personal' : 'split'));
 
 expForm.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const f = expForm.elements;
+  const kind = expForm.dataset.kind;
   const amount = parseAmount(f.amount.value);
   if (!(amount > 0)) { $('#expense-error').textContent = 'Valor inválido.'; return; }
   const row = {
     description: f.description.value.trim(),
     amount,
-    joint: f.joint.checked,
+    joint: kind === 'joint',
+    personal: kind === 'personal',
+    in_budget: kind === 'personal' && f.in_budget.checked,
     spent_on: f.spent_on.value,
-    paid_by: f.paid_by.value,
+    paid_by: kind === 'personal' ? state.user.id : f.paid_by.value,
   };
   const btn = expForm.querySelector('[type=submit]');
   btn.disabled = true;
@@ -296,7 +348,11 @@ expForm.addEventListener('submit', async (ev) => {
     ? await sb.from('expenses').update(row).eq('id', state.editingExpense.id)
     : await sb.from('expenses').insert(row);
   btn.disabled = false;
-  if (error) { $('#expense-error').textContent = 'Não foi possível guardar. Tenta de novo.'; return; }
+  if (error) {
+    console.error(error);
+    $('#expense-error').textContent = `Não foi possível guardar. ${error.message ?? ''}`;
+    return;
+  }
   $('#expense-sheet').close();
   refresh();
 });
