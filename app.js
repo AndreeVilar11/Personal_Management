@@ -69,8 +69,14 @@ async function onSession(session) {
   if (!state.user) return;
 
   const { data: members, error } = await sb.from('members').select('user_id,name').order('name');
-  if (error || !members?.some((m) => m.user_id === state.user.id)) {
-    alert('Esta conta ainda não está ligada a um membro. Vê o passo 3 do README.');
+  if (error) {
+    console.error('members:', error);
+    alert(`Erro a ler os membros: ${error.code ?? ''} ${error.message}`);
+    await sb.auth.signOut();
+    return;
+  }
+  if (!members?.some((m) => m.user_id === state.user.id)) {
+    alert(`Esta conta (${state.user.email}) ainda não está ligada a um membro. Vê o passo 3 do README.`);
     await sb.auth.signOut();
     return;
   }
