@@ -49,7 +49,14 @@ const state = {
   editingExpense: null,
   editingRecurring: null,
   tab: 'expenses',
+  categories: [],   // [{id, name, sort, active}]
+  usage: new Map(), // category_id → nº de usos (90 dias)
+  suggest: new Map(), // descrição normalizada → category_id
+  uncategorized: [], // despesas antigas sem categoria (editáveis por mim)
+  queue: false,      // a classificar em sequência
 };
+const catName = (id) => state.categories.find((c) => c.id === id)?.name;
+const normDesc = (s) => String(s ?? '').trim().toLowerCase();
 const nameOf = (id) => state.members.find((m) => m.user_id === id)?.name ?? '?';
 const me = () => state.members.find((m) => m.user_id === state.user?.id);
 const other = () => state.members.find((m) => m.user_id !== state.user?.id);
@@ -123,13 +130,22 @@ async function refresh() {
   const endD = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1);
   const end = isoDate(endD);
 
-  const [bal, exp, set, rec] = await Promise.all([
+  const [bal, exp, set, rec, cats, use, sug, unc] = await Promise.all([
     sb.from('member_balances').select('*'),
     sb.from('expenses').select('*').gte('spent_on', start).lt('spent_on', end)
       .order('spent_on', { ascending: false }).order('created_at', { ascending: false }),
     sb.from('settlements').select('*').gte('settled_on', start).lt('settled_on', end),
     sb.from('recurring_expenses').select('*').order('day_of_month'),
+    sb.from('categories').select('*').order('sort').order('name'),
+    sb.from('category_usage').select('*'),
+    sb.from('category_suggestions').select('*'),
+    sb.from('expenses').select('*').is('category_id', null)
+      .order('spent_on', { ascending: false }).limit(200),
   ]);
+  state.categories = cats.data ?? [];
+  state.usage = new Map((use.data ?? []).map((u) => [u.category_id, u.n]));
+  state.suggest = new Map((sug.data ?? []).map((s) => [s.key, s.category_id]));
+  state.uncategorized = (unc.data ?? []).filter((e) => !e.category_id && (!e.personal || isMine(e)));
   state.balances = bal.data ?? [];
   state.expenses = exp.data ?? [];
   state.settlements = set.data ?? [];
@@ -145,6 +161,7 @@ function subscribe() {
   channel = sb.channel('changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, later)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements' }, later)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, later)
     .subscribe();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 }
@@ -159,6 +176,7 @@ function render() {
   renderSummary();
   renderList();
   renderPersonal();
+  renderUncategorized();
   renderRecurring();
 }
 
@@ -211,10 +229,13 @@ function expenseItem(e, { showPayer = true } = {}) {
   else if (e.joint) meta = 'Conta conjunta';
   else meta = `Dividido · pago por ${nameOf(e.paid_by)}`;
   if (!showPayer && e.personal) meta = null;
+  const cat = catName(e.category_id);
+  const catNode = cat ? el('span', { class: 'cat' }, cat)
+    : el('span', { class: 'tag warn' }, 'por classificar');
   return el('li', editable ? { onclick: () => openExpense(e) } : { class: 'readonly' },
     el('div', { class: 'item-main' },
       el('div', { class: 'item-desc' }, e.description),
-      el('div', { class: 'item-meta' }, meta,
+      el('div', { class: 'item-meta' }, catNode, meta ? ` · ${meta}` : null,
         e.recurring_id ? el('span', { class: 'tag' }, 'fixa') : null,
         e.personal && e.in_budget ? el('span', { class: 'tag' }, 'no orçamento') : null)),
     el('div', { class: 'item-amount' }, fmt(e.amount)));
@@ -266,7 +287,7 @@ function renderRecurring() {
       el('div', { class: 'item-main' },
         el('div', { class: 'item-desc' }, r.description),
         el('div', { class: 'item-meta' },
-          `Dia ${r.day_of_month} · ${r.joint ? 'Conta conjunta' : `Pago por ${nameOf(r.paid_by)}`}`,
+          `Dia ${r.day_of_month} · ${catName(r.category_id) ?? 'Outros'} · ${r.joint ? 'Conta conjunta' : `Pago por ${nameOf(r.paid_by)}`}`,
           r.active ? null : ' · inativa')),
       el('div', { class: 'item-amount' }, fmt(r.amount)))));
 }
@@ -291,8 +312,65 @@ $('#next-month').addEventListener('click', () => {
 document.querySelectorAll('[data-close]').forEach((b) =>
   b.addEventListener('click', () => b.closest('dialog').close()));
 
+// ---------- categorias ----------
+function orderedCategories() {
+  return state.categories.filter((c) => c.active).sort((x, y) => {
+    if (x.name === 'Outros') return 1;
+    if (y.name === 'Outros') return -1;
+    return (state.usage.get(y.id) ?? 0) - (state.usage.get(x.id) ?? 0) || x.sort - y.sort;
+  });
+}
+
+/** Desenha os botões de categoria num formulário; devolve funções get/set. */
+function categoryPicker(container, { onPick } = {}) {
+  let value = null;
+  const draw = () => {
+    container.replaceChildren(
+      ...orderedCategories().map((c) => el('button', {
+        type: 'button', class: 'chip', 'aria-pressed': String(c.id === value),
+        onclick: () => { set(c.id); onPick?.(c.id); },
+      }, c.name)),
+      el('button', { type: 'button', class: 'chip add', onclick: addCategory }, '+ Nova'),
+    );
+  };
+  const set = (id) => { value = id; draw(); };
+  async function addCategory() {
+    const name = prompt('Nome da nova categoria:')?.trim();
+    if (!name) return;
+    const exists = state.categories.find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (exists) { set(exists.id); onPick?.(exists.id); return; }
+    const { data, error } = await sb.from('categories').insert({ name }).select().single();
+    if (error) { alert(`Não foi possível criar: ${error.message}`); return; }
+    state.categories.push(data);
+    set(data.id); onPick?.(data.id);
+  }
+  draw();
+  return { get: () => value, set, redraw: draw };
+}
+
+function renderUncategorized() {
+  const n = state.uncategorized.length;
+  $('#uncat-banner').hidden = n === 0;
+  $('#uncat-text').textContent = n === 1 ? '1 despesa por classificar' : `${n} despesas por classificar`;
+}
+$('#uncat-btn').addEventListener('click', () => {
+  if (!state.uncategorized.length) return;
+  state.queue = true;
+  openExpense(state.uncategorized[0]);
+});
+
 // ---------- despesa ----------
 const expForm = $('#expense-form');
+let catTouched = false; // o utilizador escolheu à mão → não sobrepor com sugestão
+const expCat = categoryPicker($('#expense-cats'), {
+  onPick: () => { catTouched = true; $('#cat-hint').textContent = ''; },
+});
+expForm.elements.description.addEventListener('input', () => {
+  if (catTouched) return;
+  const id = state.suggest.get(normDesc(expForm.elements.description.value));
+  expCat.set(id ?? null);
+  $('#cat-hint').textContent = id ? 'Sugerida a partir de registos anteriores' : '';
+});
 const KIND_HINT = {
   split: () => `Dividido a 50/50 com ${other()?.name ?? 'o outro'}.`,
   joint: () => 'Paga pela conta conjunta. Conta para o resumo, não para o saldo.',
@@ -321,6 +399,13 @@ function openExpense(e = null, defaultKind = 'split') {
   expForm.elements.spent_on.value = e?.spent_on ?? today();
   sel.value = e?.paid_by ?? state.user.id;
   setKind(e ? (e.personal ? 'personal' : e.joint ? 'joint' : 'split') : defaultKind);
+  catTouched = !!e?.category_id;
+  const sugg = e && !e.category_id ? state.suggest.get(normDesc(e.description)) : null;
+  expCat.set(e?.category_id ?? sugg ?? null);
+  $('#cat-hint').textContent = sugg ? 'Sugerida a partir de registos anteriores' : '';
+  const left = state.uncategorized.length;
+  $('#expense-title').textContent = state.queue && e && !e.category_id
+    ? `Classificar (faltam ${left})` : (e ? 'Editar despesa' : 'Nova despesa');
   expForm.querySelector('details').open = false;
   $('#expense-sheet').showModal();
   if (!e) expForm.elements.description.focus();
@@ -333,9 +418,12 @@ expForm.addEventListener('submit', async (ev) => {
   const kind = expForm.dataset.kind;
   const amount = parseAmount(f.amount.value);
   if (!(amount > 0)) { $('#expense-error').textContent = 'Valor inválido.'; return; }
+  const category_id = expCat.get();
+  if (!category_id) { $('#expense-error').textContent = 'Escolhe uma categoria.'; return; }
   const row = {
     description: f.description.value.trim(),
     amount,
+    category_id,
     joint: kind === 'joint',
     personal: kind === 'personal',
     in_budget: kind === 'personal' && f.in_budget.checked,
@@ -353,8 +441,20 @@ expForm.addEventListener('submit', async (ev) => {
     $('#expense-error').textContent = `Não foi possível guardar. ${error.message ?? ''}`;
     return;
   }
+  state.suggest.set(normDesc(row.description), category_id);
+  state.usage.set(category_id, (state.usage.get(category_id) ?? 0) + 1);
+  const edited = state.editingExpense;
   $('#expense-sheet').close();
+  if (state.queue && edited) {
+    state.uncategorized = state.uncategorized.filter((x) => x.id !== edited.id);
+    renderUncategorized();
+    if (state.uncategorized.length) { openExpense(state.uncategorized[0]); return; }
+  }
+  state.queue = false;
   refresh();
+});
+$('#expense-sheet').addEventListener('close', () => {
+  if (!$('#expense-sheet').open) setTimeout(() => { if (!$('#expense-sheet').open) state.queue = false; }, 0);
 });
 
 $('#expense-delete').addEventListener('click', async () => {
@@ -400,6 +500,7 @@ async function deleteSettlement(s) {
 
 // ---------- recorrentes ----------
 const recForm = $('#recurring-form');
+const recCat = categoryPicker($('#recurring-cats'));
 function openRecurring(r = null) {
   state.editingRecurring = r;
   recForm.reset();
@@ -411,6 +512,7 @@ function openRecurring(r = null) {
   recForm.elements.day_of_month.value = r?.day_of_month ?? '';
   recForm.elements.joint.checked = r?.joint ?? true;
   recForm.elements.active.checked = r?.active ?? true;
+  recCat.set(r?.category_id ?? null);
   $('#recurring-sheet').showModal();
 }
 $('#add-recurring').addEventListener('click', () => openRecurring());
@@ -422,8 +524,9 @@ recForm.addEventListener('submit', async (ev) => {
   const day = parseInt(f.day_of_month.value, 10);
   if (!(amount > 0)) { $('#recurring-error').textContent = 'Valor inválido.'; return; }
   if (!(day >= 1 && day <= 28)) { $('#recurring-error').textContent = 'Dia entre 1 e 28.'; return; }
+  if (!recCat.get()) { $('#recurring-error').textContent = 'Escolhe uma categoria.'; return; }
   const row = {
-    description: f.description.value.trim(), amount, day_of_month: day,
+    description: f.description.value.trim(), amount, day_of_month: day, category_id: recCat.get(),
     joint: f.joint.checked, active: f.active.checked,
   };
   const { error } = state.editingRecurring
